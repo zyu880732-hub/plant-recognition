@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>识花 · 植物识别</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root { --green-700:#2F7D4A; --green-600:#3B8D58; --green-100:#E2F0DB; --green-50:#F5F8F2; --green-bg:#EFF7EC; --amber-bg:#FFF6DF; --amber-text:#8A642B; }
+  * { -webkit-tap-highlight-color: transparent; }
+  body { font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif; background:var(--green-50); color:#20352A; }
+  .hidden-view { display:none !important; }
+  .fade-in { animation: fadeIn .4s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+  .spinner { width:52px;height:52px;border:6px solid #D9E9DA;border-top-color:var(--green-700);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 20px; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .card-shadow { box-shadow:0 12rpx 40rpx rgba(44,82,61,.08); box-shadow:0 6px 24px rgba(44,82,61,.10); }
+  .btn-primary { background:var(--green-700);color:#fff;border-radius:999px;height:54px;font-weight:600;font-size:16px;transition:all .2s; }
+  .btn-primary:active { transform:scale(.97);background:var(--green-600); }
+  .btn-secondary { background:var(--green-100);color:var(--green-700);border-radius:999px;height:54px;font-weight:600;font-size:16px;transition:all .2s; }
+  .btn-secondary:active { transform:scale(.97); }
+  input[type="file"] { display:none; }
+  .history-img { width:72px;height:72px;border-radius:12px;object-fit:cover;flex-shrink:0; }
+  .tag { display:inline-block;padding:3px 12px;border-radius:999px;font-size:12px;font-weight:600; }
+  .leaf-bg { background:linear-gradient(145deg,#E2F0DB,#F9FBF5); }
+  .nav-bar { position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #E8EEE9;padding:8px 0 calc(8px + env(safe-area-inset-bottom));display:flex;justify-content:space-around;z-index:50; }
+  .nav-item { display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:#9AA39D;cursor:pointer;transition:color .2s;padding:4px 12px; }
+  .nav-item.active { color:var(--green-700);font-weight:600; }
+  .nav-icon { font-size:22px; }
+  .content-area { padding-bottom:calc(100px + env(safe-area-inset-bottom));min-height:100vh; }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ========== 首页 ========== -->
+<div id="view-home" class="content-area fade-in px-5 pt-10 pb-6">
+  <div class="text-center">
+    <div class="text-5xl mb-1">🌿</div>
+    <h1 class="text-3xl font-extrabold">识花</h1>
+    <p class="text-gray-500 text-sm mt-1">拍一张照片，认识身边的植物</p>
+  </div>
+  <div class="card-shadow leaf-bg rounded-3xl py-10 px-6 text-center mt-8">
+    <div class="text-7xl mb-3">☘️</div>
+    <p class="font-bold text-lg">发现自然之美</p>
+    <p class="text-gray-500 text-sm mt-1">尽量拍摄完整、清晰的叶片或花朵</p>
+  </div>
+  <div class="mt-7 space-y-3">
+    <label class="btn-primary w-full flex items-center justify-center cursor-pointer" onclick="document.getElementById('cameraInput').click()">
+      📷&nbsp;&nbsp;拍照识别
+    </label>
+    <label class="btn-secondary w-full flex items-center justify-center cursor-pointer" onclick="document.getElementById('albumInput').click()">
+      🖼️&nbsp;&nbsp;从相册选择
+    </label>
+  </div>
+  <div class="card-shadow bg-white rounded-3xl p-5 mt-7">
+    <p class="font-bold mb-2">拍摄小提示</p>
+    <p class="text-gray-500 text-sm leading-7">• 保持光线充足，避免逆光<br>• 让植物主体占据画面中央<br>• 结果不确定时，补拍叶片或茎部特写</p>
+  </div>
+  <div class="text-center mt-6">
+    <span class="text-green-700 font-semibold cursor-pointer" onclick="showView('history')">查看识别历史 →</span>
+  </div>
+</div>
+
+<!-- ========== 照片确认页 ========== -->
+<div id="view-confirm" class="content-area hidden-view fade-in px-5 pt-8 pb-6">
+  <h2 class="text-2xl font-extrabold text-center mt-2">照片清晰吗？</h2>
+  <p class="text-gray-500 text-center text-sm mt-2 mb-5">请确认叶片或花朵细节清楚可见</p>
+  <img id="confirmImage" class="card-shadow rounded-3xl w-full object-cover" style="height:380px" />
+  <div id="confirmLoading" class="hidden-view text-center py-8">
+    <div class="spinner"></div>
+    <p class="text-green-700">正在辨认植物，请稍候…</p>
+  </div>
+  <div id="confirmActions" class="mt-6 space-y-3">
+    <button class="btn-primary w-full" onclick="startRecognition()">开始识别</button>
+    <button class="btn-secondary w-full" onclick="showView('home')">重新选择</button>
+  </div>
+</div>
+
+<!-- ========== 识别结果页 ========== -->
+<div id="view-result" class="content-area hidden-view fade-in px-5 pt-6 pb-6">
+  <img id="resultImage" class="card-shadow rounded-3xl w-full object-cover" style="height:215px" />
+  <div class="card-shadow bg-white rounded-3xl p-5 mt-n4 mx-2 relative z-10">
+    <div id="resultConfidence" class="text-green-700 text-xs font-semibold"></div>
+    <h2 id="resultName" class="text-2xl font-extrabold mt-1 mb-1"></h2>
+    <p id="resultLatin" class="text-gray-500 text-sm italic"></p>
+    <hr class="my-4 border-gray-200" />
+    <div class="mb-4">
+      <p class="font-bold text-sm mb-1">植物简介</p>
+      <p id="resultDesc" class="text-gray-600 text-sm leading-6"></p>
+    </div>
+    <div class="mb-4">
+      <p class="font-bold text-sm mb-1">识别依据</p>
+      <p id="resultBasis" class="text-gray-600 text-sm leading-6"></p>
+    </div>
+    <div class="rounded-2xl p-4" style="background:var(--green-bg)">
+      <p class="font-bold text-sm mb-1">基础养护建议</p>
+      <p id="resultCare" class="text-gray-600 text-sm leading-6"></p>
+    </div>
+    <div id="resultUncertain" class="hidden-view rounded-2xl p-3 mt-3 text-sm leading-5" style="background:var(--amber-bg);color:var(--amber-text)">⚠️ 请再拍一张叶片或茎部特写。</div>
+  </div>
+  <div class="mt-6 space-y-3">
+    <button class="btn-primary w-full" onclick="showView('home')">继续识别</button>
+  </div>
+  <p class="text-center text-gray-400 text-xs mt-3">✓ 已保存到识别历史</p>
+</div>
+
+<!-- ========== 识别历史页 ========== -->
+<div id="view-history" class="content-area hidden-view fade-in px-5 pt-8 pb-6">
+  <div class="flex items-center justify-between mb-5">
+    <h2 class="text-2xl font-extrabold">识别历史</h2>
+    <span id="clearHistoryBtn" class="text-red-400 text-sm font-semibold cursor-pointer hidden-view" onclick="clearHistory()">清空</span>
+  </div>
+  <div id="historyEmpty" class="text-center pt-16">
+    <div class="text-6xl mb-3">🌱</div>
+    <p class="text-lg font-bold mb-1">还没有识别记录</p>
+    <p class="text-gray-400 text-sm">去拍下你遇见的第一株植物吧</p>
+  </div>
+  <div id="historyList" class="space-y-3"></div>
+</div>
+
+</div><!-- #app -->
+
+<!-- 底部导航 -->
+<div id="navBar" class="nav-bar">
+  <div class="nav-item active" onclick="showView('home')">
+    <span class="nav-icon">🏠</span><span>首页</span>
+  </div>
+  <div class="nav-item" onclick="showView('history')">
+    <span class="nav-icon">📋</span><span>历史</span>
+  </div>
+</div>
+
+<!-- 文件输入 -->
+<input type="file" id="cameraInput" accept="image/*" capture="environment" />
+<input type="file" id="albumInput" accept="image/*" />
+
+<script>
+// ========== 状态 ==========
+let currentImagePath = null;
+let currentResult = null;
+
+// ========== 植物知识库（示例数据，接入真实 API 后替换） ==========
+const plantDB = [
+  { chineseName:"龟背竹", scientificName:"Monstera deliciosa", confidence:0.87,
+    description:"天南星科龟背竹属多年生常绿植物，叶片宽大，成熟后常形成裂口与孔洞，极具热带风情。",
+    identificationBasis:"叶片较大，具有明显裂口和孔洞。",
+    careAdvice:"放在明亮的散射光环境，避免盆土长期积水。生长季每 1-2 周施一次薄肥。" },
+  { chineseName:"绿萝", scientificName:"Epipremnum aureum", confidence:0.82,
+    description:"天南星科麒麟叶属常绿藤本，叶片心形，是最常见的室内观叶植物之一，耐阴易养。",
+    identificationBasis:"叶片呈心形，颜色翠绿，藤蔓状生长。",
+    careAdvice:"喜散射光，耐阴。保持土壤微湿即可，冬季减少浇水。注意对宠物有毒。" },
+  { chineseName:"多肉植物·玉露", scientificName:"Haworthia cooperi", confidence:0.75,
+    description:"阿福花科瓦苇属多肉植物，叶片晶莹剔透，顶端有透明窗，喜凉爽半阴环境。",
+    identificationBasis:"叶片排列紧凑，顶端透明，呈窗状结构。",
+    careAdvice:"放在明亮散射光处，避免暴晒。浇水见干见湿，夏季控水休眠。" },
+  { chineseName:"月季", scientificName:"Rosa chinensis", confidence:0.80,
+    description:"蔷薇科蔷薇属灌木，花色丰富，四季开花，是中国传统名花之一。",
+    identificationBasis:"花朵层叠，花瓣较多，枝干有刺。",
+    careAdvice:"喜阳光充足、通风良好的环境。生长期保持水分充足，花后及时修剪。" },
+  { chineseName:"吊兰", scientificName:"Chlorophytum comosum", confidence:0.79,
+    description:"天门冬科吊兰属多年生草本，叶细长下垂，能抽出匍匐枝长出小植株，净化空气效果好。",
+    identificationBasis:"叶片细长呈带状，自然下垂，有匍匐茎。",
+    careAdvice:"喜半阴环境，避免强光直射。保持盆土湿润，空气干燥时喷洒叶面。" },
+  { chineseName:"薄荷", scientificName:"Mentha haplocalyx", confidence:0.71,
+    description:"唇形科薄荷属多年生草本，茎叶有清凉香气，可食用可药用，生长迅速。",
+    identificationBasis:"叶片对生，边缘有锯齿，揉搓有清凉气味。",
+    careAdvice:"喜阳光充足，保持土壤湿润。生长迅速，需定期修剪控制株型。" }
+];
+
+// ========== 视图切换 ==========
+function showView(name) {
+  ['home','confirm','result','history'].forEach(v => {
+    document.getElementById('view-' + v).classList.add('hidden-view');
+  });
+  const el = document.getElementById('view-' + name);
+  el.classList.remove('hidden-view');
+  el.classList.remove('fade-in');
+  void el.offsetWidth; // 触发重绘以重启动画
+  el.classList.add('fade-in');
+  // 底部导航高亮
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (name === 'home' || name === 'confirm' || name === 'result') {
+    document.querySelectorAll('.nav-item')[0].classList.add('active');
+  } else {
+    document.querySelectorAll('.nav-item')[1].classList.add('active');
+  }
+  // 确认页和结果页隐藏底部导航
+  document.getElementById('navBar').style.display = (name === 'confirm' || name === 'result') ? 'none' : 'flex';
+  window.scrollTo(0, 0);
+  if (name === 'history') loadHistory();
+}
+
+// ========== 图片选择 ==========
+function handleImageSelected(input) {
+  const file = input.files[0];
+  if (!file) return;
+  currentImagePath = URL.createObjectURL(file);
+  document.getElementById('confirmImage').src = currentImagePath;
+  document.getElementById('confirmLoading').classList.add('hidden-view');
+  document.getElementById('confirmActions').classList.remove('hidden-view');
+  showView('confirm');
+  input.value = ''; // 允许重复选择同一文件
+}
+
+document.getElementById('cameraInput').addEventListener('change', function() { handleImageSelected(this); });
+document.getElementById('albumInput').addEventListener('change', function() { handleImageSelected(this); });
+
+// ========== 模拟识别（接入真实 API 时替换此函数） ==========
+function mockRecognize() {
+  // 随机返回一个示例结果，模拟识别延迟
+  return new Promise(resolve => {
+    setTimeout(() => {
+      const plant = plantDB[Math.floor(Math.random() * plantDB.length)];
+      resolve({ ...plant, uncertain: plant.confidence < 0.75 });
+    }, 1200 + Math.random() * 600);
+  });
+}
+
+// 接入真实 API 时的示例（取消注释并配置后端地址即可使用）：
+// async function recognizePlant(imageFile) {
+//   const formData = new FormData();
+//   formData.append('image', imageFile);
+//   const res = await fetch('https://your-api-domain.com/api/recognize', { method:'POST', body:formData });
+//   const body = await res.json();
+//   if (!body.success) throw new Error(body.message || '识别失败');
+//   return body.data;
+// }
+
+// ========== 开始识别 ==========
+async function startRecognition() {
+  document.getElementById('confirmActions').classList.add('hidden-view');
+  document.getElementById('confirmLoading').classList.remove('hidden-view');
+  try {
+    const result = await mockRecognize();
+    currentResult = result;
+    renderResult(result);
+    saveToHistory(currentImagePath, result);
+    showView('result');
+  } catch (e) {
+    alert('识别失败：' + (e.message || '请稍后重试'));
+    document.getElementById('confirmLoading').classList.add('hidden-view');
+    document.getElementById('confirmActions').classList.remove('hidden-view');
+  }
+}
+
+// ========== 渲染结果 ==========
+function renderResult(r) {
+  document.getElementById('resultImage').src = currentImagePath;
+  document.getElementById('resultConfidence').textContent = '识别结果 · 置信度 ' + Math.round(r.confidence * 100) + '%';
+  document.getElementById('resultName').textContent = '🌿 这可能是' + r.chineseName;
+  document.getElementById('resultLatin').textContent = '学名：' + r.scientificName;
+  document.getElementById('resultDesc').textContent = r.description;
+  document.getElementById('resultBasis').textContent = r.identificationBasis;
+  document.getElementById('resultCare').textContent = r.careAdvice;
+  document.getElementById('resultUncertain').classList.toggle('hidden-view', !(r.uncertain || r.confidence < 0.65));
+}
+
+// ========== 历史记录（localStorage） ==========
+const HISTORY_KEY = 'plant_recognition_history';
+const MAX_HISTORY = 50;
+
+function getHistory() { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+
+function saveToHistory(imagePath, result) {
+  const list = getHistory();
+  list.unshift({ id: Date.now(), imagePath, result, createdAt: Date.now() });
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, MAX_HISTORY)));
+}
+
+function loadHistory() {
+  const records = getHistory();
+  const listEl = document.getElementById('historyList');
+  const emptyEl = document.getElementById('historyEmpty');
+  const clearBtn = document.getElementById('clearHistoryBtn');
+  if (records.length === 0) {
+    listEl.innerHTML = '';
+    emptyEl.classList.remove('hidden-view');
+    clearBtn.classList.add('hidden-view');
+    return;
+  }
+  emptyEl.classList.add('hidden-view');
+  clearBtn.classList.remove('hidden-view');
+  listEl.innerHTML = records.map(item => {
+    const d = new Date(item.createdAt);
+    const pad = n => String(n).padStart(2, '0');
+    const timeStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `
+      <div class="card-shadow bg-white rounded-2xl p-3 flex items-center gap-3">
+        <img src="${item.imagePath}" class="history-img" alt="${item.result.chineseName}" />
+        <div class="flex-1 min-w-0">
+          <p class="font-bold text-base">${item.result.chineseName}</p>
+          <p class="text-gray-400 text-xs italic truncate">${item.result.scientificName}</p>
+          <p class="text-gray-300 text-xs mt-1">${timeStr}</p>
+        </div>
+        <span class="text-2xl text-gray-300">›</span>
+      </div>`;
+  }).join('');
+}
+
+function clearHistory() {
+  if (!confirm('清空后无法恢复，确认继续吗？')) return;
+  localStorage.removeItem(HISTORY_KEY);
+  loadHistory();
+}
+
+// ========== 初始化 ==========
+showView('home');
+</script>
+</body>
+</html>
